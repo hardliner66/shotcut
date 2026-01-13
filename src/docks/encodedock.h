@@ -184,6 +184,12 @@ private:
                            int realtime,
                            int pass = 0,
                            const QThread::Priority priority = Settings.jobPriority());
+    MeltJob *createMeltJob(Mlt::Producer *service,
+                           const QString &from,
+                           const QString &target,
+                           int realtime,
+                           int pass = 0,
+                           const QThread::Priority priority = Settings.jobPriority());
     void runMelt(const QString &target, int realtime = -1);
     void enqueueAnalysis();
     void enqueueMelt(const QStringList &targets, int realtime);

@@ -487,6 +487,7 @@ void EncodeDock::onProducerOpened()
         markersModel.load(MAIN.multitrack());
         const auto markerStr = tr("Marker");
         auto ranges = markersModel.ranges();
+        ui->fromCombo->addItem(comboText, QStringLiteral("marker:batch");
         for (auto i = ranges.constBegin(); i != ranges.constEnd(); ++i) {
             QString comboText;
             if (i.value().startsWith(markerStr)) {
@@ -1358,19 +1359,19 @@ MeltJob *EncodeDock::convertReframe(Mlt::Producer *service,
 }
 
 MeltJob *EncodeDock::createMeltJob(Mlt::Producer *service,
+                                   const QString &from,
                                    const QString &target,
                                    int realtime,
                                    int pass,
-                                   const QThread::Priority priority)
-{
+                                   const QThread::Priority priority) {
     QString caption = tr("Export Video/Audio");
     if (Util::warnIfNotWritable(target, this, caption))
         return nullptr;
 
     if (JOBS.targetIsInProgress(target)) {
         QMessageBox::warning(this,
-                             windowTitle(),
-                             QObject::tr("A job already exists for %1").arg(target));
+                            windowTitle(),
+                            QObject::tr("A job already exists for %1").arg(target));
         return nullptr;
     }
 
@@ -1404,7 +1405,7 @@ MeltJob *EncodeDock::createMeltJob(Mlt::Producer *service,
                     QScopedPointer<Mlt::Filter> filter(tempProducer->filter(i));
                     if (filter->get_in() > 0)
                         filter->set_in_and_out(filter->get_in() - producerIn,
-                                               filter->get_out() - producerIn);
+                                                filter->get_out() - producerIn);
                 }
             }
         }
@@ -1429,8 +1430,8 @@ MeltJob *EncodeDock::createMeltJob(Mlt::Producer *service,
     QString xml = dom.toString(0);
     if (xml.contains(QDir::fromNativeSeparators(target))) {
         QMessageBox::warning(this,
-                             caption,
-                             tr("You cannot write to a file that is in your project.\n"
+                            caption,
+                            tr("You cannot write to a file that is in your project.\n"
                                 "Try again with a different folder or file name."));
         return nullptr;
     }
@@ -1450,17 +1451,16 @@ MeltJob *EncodeDock::createMeltJob(Mlt::Producer *service,
                             fps.y(),
                             priority);
         job->setUseMultiConsumer(ui->widthSpinner->value() != MLT.profile().width()
-                                 || ui->heightSpinner->value() != MLT.profile().height()
-                                 || double(ui->aspectNumSpinner->value())
+                                || ui->heightSpinner->value() != MLT.profile().height()
+                                || double(ui->aspectNumSpinner->value())
                                             / double(ui->aspectDenSpinner->value())
                                         != MLT.profile().dar()
-                                 || (ui->fromCombo->currentData().toString() != "clip"
-                                     && qFloor(ui->fpsSpinner->value() * 10000.0)
+                                || (ui->fromCombo->currentData().toString() != "clip"
+                                    && qFloor(ui->fpsSpinner->value() * 10000.0)
                                             != qFloor(MLT.profile().fps() * 10000.0)));
         delete tmp;
     }
 
-    const auto &from = ui->fromCombo->currentData().toString();
     if (MAIN.isMultitrackValid() && from.startsWith("marker:")) {
         bool ok = false;
         int index = from.mid(7).toInt(&ok);
@@ -1474,6 +1474,16 @@ MeltJob *EncodeDock::createMeltJob(Mlt::Producer *service,
         }
     }
     return job;
+}
+
+MeltJob *EncodeDock::createMeltJob(Mlt::Producer *service,
+                                   const QString &target,
+                                   int realtime,
+                                   int pass,
+                                   const QThread::Priority priority)
+{
+    const auto &from = ui->fromCombo->currentData().toString();
+    return createMeltJob(service, from, target, realtime, pass, priority);
 }
 
 void EncodeDock::runMelt(const QString &target, int realtime)
@@ -1586,13 +1596,32 @@ void EncodeDock::enqueueMelt(const QStringList &targets, int realtime)
             }
         }
     } else {
-        MeltJob *job = createMeltJob(service, targets[0], realtime, pass);
-        if (job) {
-            JOBS.add(job);
-            if (pass) {
-                job = createMeltJob(service, targets[0], realtime, 2);
-                if (job)
+        QString from = ui->fromCombo->currentData().toString();
+        if (from == "marker:batch") {
+            int i = 0;
+            auto ranges = markersModel.ranges();
+            for (auto m = ranges.constBegin(); m != ranges.constEnd(); ++m) {
+                from = QStringLiteral("marker:%1").arg(i.key());
+                MeltJob *job = createMeltJob(service, from, targets[i], realtime, pass);
+                if (job) {
                     JOBS.add(job);
+                    if (pass) {
+                        job = createMeltJob(service, from, targets[i], realtime, 2);
+                        if (job)
+                            JOBS.add(job);
+                    }
+                }
+                i++;
+            }
+        } else {
+            MeltJob *job = createMeltJob(service, targets[0], realtime, pass);
+            if (job) {
+                JOBS.add(job);
+                if (pass) {
+                    job = createMeltJob(service, targets[0], realtime, 2);
+                    if (job)
+                        JOBS.add(job);
+                }
             }
         }
     }
